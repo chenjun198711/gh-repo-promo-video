@@ -1,6 +1,6 @@
 ---
 name: gh-repo-promo-video
-description: 把 GitHub 开源项目做成 1 分钟推广短视频（竖屏 9:16 或横屏 16:9，字幕烧进画面，带背景音乐与转场音效），并自动生成 B站/YouTube 风格的高点击封面（横竖两版 + YouTube 规范尺寸）。一条指令跑完：抓仓库元数据与 README 里的演示素材 → 写六段式脚本 → 火山引擎 TTS 配音 → 程序化合成 BGM/音效并做人声闪避 → 逐场渲染 → 输出成片 + 封面。当用户要求「给这个 GitHub 项目/仓库做推广视频」「每天认识一款黑科技软件」「开源项目介绍短视频」「把 repo 做成短视频」「给视频加背景音乐/音效」「要个吸引人的封面/缩略图/YouTube 封面/B站封面」「改成 16:9 / 横屏 / B站版本」，或指定某个 GitHub 地址要做视频时使用。也支持从 GitHub Trending 自动挑候选选题。
+description: 把 GitHub 开源项目做成 1 分钟推广短视频（竖屏 9:16 或横屏 16:9，字幕烧进画面，带背景音乐与转场音效），并自动生成 B站/YouTube 风格的高点击封面（横竖两版 + YouTube 规范尺寸）。一条指令跑完：抓仓库元数据与 README 里的演示素材 → 写六段式脚本 → 火山引擎 TTS 配音 → 程序化合成 BGM/音效并做人声闪避 → 逐场渲染 → 输出成片 + 封面。当用户要求「给这个 GitHub 项目/仓库做推广视频」「每天认识一款黑科技软件」「开源项目介绍短视频」「把 repo 做成短视频」「给视频加背景音乐/音效」「要个吸引人的封面/缩略图/YouTube 封面/B站封面」「改成 16:9 / 横屏 / B站版本」，或指定某个 GitHub 地址要做视频时使用。也支持从 GitHub Trending 自动挑候选选题。**同样适用于非 GitHub 项目**（VPS 选购、SaaS、软件测评等）：只要给一段录屏/截图，写好 cover.json 就能出横竖两版封面（repo.json 可省略）。
 agent_created: true
 ---
 
@@ -311,6 +311,41 @@ python scripts/make_cover.py --dir <WORKDIR> --ratio both
 - 命令行参数（`--headline / --sub / --badge / --cta / --asset / --start / --accent`）优先于 cover.json
 - `headline` 里的 `\n` 强制换行，`**...**` 出琥珀色高亮（与 caption 同一套语法）
 
+### 非 GitHub 项目（VPS / SaaS / 软件测评）怎么用
+
+`repo.json` 是**可选**的。没有它时，把等价字段直接写进 `cover.json`，
+脚本会自动接住，版式代码不用改：
+
+| 字段 | 对应原来 repo.json 的 | 说明 |
+|---|---|---|
+| `name` | `name` | 左上角主体名（如 `BandwagonHost`）|
+| `owner` | `owner` | 有则渲染成 `owner/name`；留空只显示 `name` |
+| `stars` | `stars` | 有值才出右上角金色星标胶囊 |
+| `eyebrow` | — | **没有 stars 时的右上角替代胶囊**，琥珀色小标签，放一句规格亮点（如 `2核 1G 20G`）|
+| `meta` | `language · license · 开源` | 覆盖左上角主体名下方那行灰色小字 |
+| `title` | — | 卡片窗口标题栏文字 |
+
+```json
+{
+  "name": "BandwagonHost",
+  "title": "BandwagonHost — VPS Hosting",
+  "badge": "VPS 实测",
+  "eyebrow": "2核 1G 20G",
+  "meta": "洛杉矶 USCA_2 机房",
+  "headline": "**49美元**一年\n搬瓦工VPS实测",
+  "sub": "购买 · 配置 · 跑分 全流程实测",
+  "cta": "看完整评测",
+  "asset": "assets/main2.png",
+  "accent": [232, 138, 18]
+}
+```
+
+- **`accent` 换品牌色**：默认是 GitHub 绿。搬瓦工这类橙黄系品牌用 `[232,138,18]` 更贴，
+  但要和 `AMBER` 高亮色（255,199,61）拉开亮度差，否则大字高亮会糊在强调色里
+- **`badge` / `cta` 必须手写**：默认值是「开源精选」「GitHub 搜 xxx」，非 GitHub 项目会驴唇不对马嘴
+- **截图里的数字要先核实再用**：封面是唯一会被单独传播的东西。中国→美西的 ICMP 延迟物理下限约 67ms，
+  若测速网站显示 40~50ms，说明那不是直连延迟（多半是 CDN 边缘节点），**不能当成卖点写上封面**
+
 ### 写封面文案的硬规则（不遵守就白做）
 
 - **单行 ≤ 6 个全角字符等效宽度**（数字/英文按 0.55 折算）。超了字号会被自动压小，字就没气势了。
@@ -325,7 +360,8 @@ python scripts/make_cover.py --dir <WORKDIR> --ratio both
 ```
 左列：徽标 + owner/name + 语言·协议 → 大字（带高亮）→ 品牌色强调条 → 副标题 → 行动胶囊
 右列：主体卡片 = 截图 + 窗口外框（红黄绿三点）+ 投影 + 品牌色光晕
-右上：金色星标胶囊       背景：暗底渐变 + 斜向光束 + 点阵 + 品牌色光斑
+右上：金色星标胶囊（无 stars 时换成 `eyebrow` 胶囊）
+背景：暗底渐变 + 斜向光束 + 点阵 + 品牌色光斑
 ```
 
 - 大字用**黑色描边 + 投影**，缩到 200px 宽也能读；高亮段额外加琥珀色光晕
@@ -333,6 +369,21 @@ python scripts/make_cover.py --dir <WORKDIR> --ratio both
 - **封面素材别用白底空界面截图**：浅色大面积留白的截图放进卡片会显得空。优先挑信息密度高的那一帧
   （如 AI 面板 + 表格），录屏用 `asset_start` 定位——和正片用同一段录屏也没关系，封面本来就是挑最抓眼的一帧
 - 素材缺失时自动退化成"项目名片"（首字母 + 仓库名 + 网址），右半边不会空
+- **宽录屏（2:1 左右）做卡片会留白**：卡片框是 900×700，2:1 素材只能占 900×450，
+  上下各空一大块。把**两段不同时期的画面裁成同宽、竖着拼成近 4:3**，卡片就能撑满，
+  顺便在一张图里讲完"买什么 + 实测结果"：
+
+  ```bash
+  ffmpeg -y -ss 62 -i <录屏.mp4> -ss 500 -i <录屏.mp4> -filter_complex \
+    "[0:v]crop=640:240:0:80,scale=1280:480:flags=lanczos,pad=1280:488:0:0:color=0x2b3644,unsharp=5:5:0.5:5:5:0[a];\
+     [1:v]crop=640:208:0:46,scale=1280:416:flags=lanczos,unsharp=5:5:0.5:5:5:0[b];\
+     [a][b]vstack=inputs=2[out]" -map "[out]" -frames:v 1 assets/main2.png
+  ```
+
+  - `pad=...:ih+8` 那条 8px 深色缝是刻意的分隔线，让两块截图看起来像"拼贴"而不是"截错了"
+  - 上块取"产品/价格"信息，下块取"运行/数据"画面，**两块别取同一个界面**（信息重复＝浪费半个封面）
+  - 每个 `crop` 单独试几组 y 偏移再拼：录屏常带窗口标题栏、Xshell 状态栏、桌面杂边，切掉才干净
+  - 效果：画面自己讲完了"全流程"，`sub` 那行就不必再罗列流程
 
 ## 八、交付
 
@@ -346,9 +397,12 @@ python scripts/make_cover.py --dir <WORKDIR> --ratio both
 2. **PowerShell `2> file` 的日志是 UTF-16 LE** → Python 读它必须 `encoding="utf-16"`，否则正则全匹配不到
 3. **PowerShell 工具 stdout 常不回显** → 结果写临时文件再用 Read 读
 4. **`& $exe | Out-File` 在 stderr 有内容时返回非 0 退出码**，但任务可能实际成功 → 判断成败要读日志文件，不能只看退出码
-5. **PowerShell 一次 `Remove-Item "a","b"` 可能静默不生效** → 用 `foreach` 逐个删。
-   注意本机**安全删除网关会"报错但实际已删"**（返回 `[safe-delete][SAFE_DELETE_FAIL_CLOSED] trash-failed`，
-   同时 detail 里写着目标已处理）→ 别据返回值判断成败，删完用 `Test-Path` 复核，否则会重复劳动；
+5. **PowerShell 删文件会静默不生效** → 一次 `Remove-Item "a","b"` 不行；`foreach` + `Remove-Item -Force`
+   也可能整批没删掉且**不报错**（实测踩到过）。最可靠的是直接调 .NET：
+   `[System.IO.File]::Delete($p)` / `[System.IO.Directory]::Delete($p, $true)`，
+   删完**必须 `Test-Path` 复核**再继续，否则会以为已清理而其实没清。
+   注意本机安全删除网关有时"报错但实际已删"（返回 `[safe-delete][SAFE_DELETE_FAIL_CLOSED] trash-failed`
+   而 detail 里写着目标已处理）→ 同样别据返回值判断成败；
    目录删不掉时改用 `Move-Item` 归档到 `_tmp/` 更稳
 6. **ffmpeg 不在 PATH** 时用 winget 安装的绝对路径，脚本里 `find_ffmpeg()` 已自动处理
 7. **旋律/鼓点写进低频区会"消失"**：合成 BGM 时若把音色全放在 400Hz 以下，手机外放听不到 →

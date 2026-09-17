@@ -204,13 +204,30 @@ def _wrap_plain(text, fnt, max_w):
     return lines
 
 
+def _is_word_char(c):
+    """ASCII 字母/数字才算"词内字符"——中文可以在任意字之间断，英文单词不行。"""
+    return c.isascii() and c.isalnum()
+
+
+def _splits_word(text, lines):
+    """折行是否把一个英文单词从中间劈开（如 TrendRadar → TrendRad / ar）。"""
+    for (_a, b) in lines[:-1]:
+        if 0 < b < len(text) and _is_word_char(text[b - 1]) and _is_word_char(text[b]):
+            return True
+    return False
+
+
 def plan_headline(text, fnt_path, max_w, cap, floor, max_lines=2, step=3):
-    """选字号 + 折行；标题长度不可控，所以先算好再画（版式才居得中）。"""
+    """选字号 + 折行；标题长度不可控，所以先算好再画（版式才居得中）。
+
+    行数达标还不够——如果这一版折行把英文单词劈开了，就继续缩小字号再试，
+    直到它能整词换行（纯中文标题不受影响，中文本来就允许任意断行）。
+    """
     size = cap
     while size > floor:
         f = _font(fnt_path, size)
         lines = _wrap_plain(text, f, max_w)
-        if len(lines) <= max_lines:
+        if len(lines) <= max_lines and (len(lines) < 2 or not _splits_word(text, lines)):
             return f, lines
         size -= step
     f = _font(fnt_path, floor)
@@ -443,6 +460,18 @@ def load_spec(base, repo, cli):
             spec = json.load(open(cp, encoding="utf-8")) or {}
         except Exception:
             spec = {}
+
+    # 非 GitHub 项目的推广片（VPS / SaaS / 软件测评）没有 repo.json：
+    # 允许在 cover.json 里写 name / owner / stars / language / license / description / html_url，
+    # 取值后再把 repo 补全，后面所有版式代码无需再判断来源。
+    for k in ("name", "owner", "stars", "language", "license",
+              "description", "html_url"):
+        if repo.get(k) in (None, "") and spec.get(k) not in (None, ""):
+            repo[k] = spec.pop(k)
+    repo.setdefault("name", "Promo")
+    repo.setdefault("owner", "")
+    repo.setdefault("stars", 0)
+
     scenes = []
     sp = os.path.join(base, "script.json")
     if os.path.exists(sp):
@@ -458,6 +487,9 @@ def load_spec(base, repo, cli):
         spec.setdefault("asset", hook.get("asset"))
         if hook.get("asset_start"):
             spec.setdefault("asset_start", hook["asset_start"])
+    # 既没有 cover.json 也没有 script.json 时兜底，避免后面 spec["headline"] 直接 KeyError
+    if not spec.get("headline"):
+        spec["headline"] = repo["name"]
 
     desc = repo.get("description") or ""
     if not spec.get("sub"):
@@ -493,14 +525,24 @@ def render_wide(base, spec, repo, out_png, out_jpg=None):
     w_badge, h_badge = _pill_at(canvas, pad_x, 82, spec["badge"], fb,
                                 fill=accent, txt=(6, 24, 12), glow=accent, glow_alpha=110)
     fname = _font(F_BOLD, 38)
+    name_segs = ([("{}".format(repo["owner"]) + "/", (200, 214, 230))]
+                 if repo.get("owner") else []) + [(repo["name"], None)]
     draw_cover_text(canvas, pad_x + w_badge + 22, 82 + h_badge * 0.5 - fname.size * 0.68,
-                    [(f"{repo['owner']}/", (200, 214, 230)), (repo["name"], None)], fname,
-                    stroke=0, glow=None, shadow_alpha=140)
-    meta = f"{repo.get('language', '')} · {repo.get('license', '')} · 开源".strip(" ·")
-    fm = _font(F_REG, 27)
-    mx = pad_x + w_badge + 22
-    ImageDraw.Draw(canvas).text((mx, 82 + h_badge + 16), meta, font=fm, fill=(146, 162, 180))
-    _, sh = star_badge(canvas, W - pad_x, 78, repo["stars"], _font(F_BOLD, 32))
+                    name_segs, fname, stroke=0, glow=None, shadow_alpha=140)
+    meta = spec.get("meta")
+    if meta is None:
+        meta = f"{repo.get('language', '')} · {repo.get('license', '')} · 开源".strip(" ·")
+    if meta:
+        fm = _font(F_REG, 27)
+        ImageDraw.Draw(canvas).text((pad_x + w_badge + 22, 82 + h_badge + 16),
+                                    meta, font=fm, fill=(146, 162, 180))
+    # 右上角：有 Star 数就出星标，否则（非 GitHub 项目）出 eyebrow 胶囊
+    if repo.get("stars"):
+        star_badge(canvas, W - pad_x, 78, repo["stars"], _font(F_BOLD, 32))
+    elif spec.get("eyebrow"):
+        _pill_at(canvas, W - pad_x, 78, spec["eyebrow"], _font(F_BOLD, 30),
+                 fill=(46, 34, 8), txt=AMBER, outline=(146, 108, 20), pad_x=30, pad_y=15,
+                 glow=(255, 190, 40), glow_alpha=70, align="right")
 
     # ---- 大字 + 副标题 + 行动指引（左列）
     plain, flags = parse_rich(spec["headline"])
@@ -534,9 +576,14 @@ def render_tall(base, spec, repo, out_png):
     bw_, bh_ = _pill_size(canvas, spec["badge"], fb, 30, 15)
     _pill_at(canvas, (W - bw_) / 2, 132, spec["badge"], fb, fill=accent, txt=(6, 24, 12),
              glow=accent, glow_alpha=110)
-    star_badge(canvas, W - 64, 132, repo["stars"], _font(F_BOLD, 28))
+    if repo.get("stars"):
+        star_badge(canvas, W - 64, 132, repo["stars"], _font(F_BOLD, 28))
+    elif spec.get("eyebrow"):
+        _pill_at(canvas, W - 64, 132, spec["eyebrow"], _font(F_BOLD, 28),
+                 fill=(46, 34, 8), txt=AMBER, outline=(146, 108, 20), pad_x=28, pad_y=14,
+                 glow=(255, 190, 40), glow_alpha=70, align="right")
     fname = _font(F_BOLD, 40)
-    nm = f"{repo['owner']}/{repo['name']}"
+    nm = f"{repo['owner']}/{repo['name']}" if repo.get("owner") else repo["name"]
     draw_cover_text(canvas, (W - fname.getlength(nm)) / 2, 132 + bh_ + 30,
                     [(nm, (206, 219, 234))], fname, stroke=0, glow=None, shadow_alpha=130)
 
@@ -562,7 +609,8 @@ def render_tall(base, spec, repo, out_png):
 
 def main():
     ap = argparse.ArgumentParser(description="生成 B站/YouTube 风格封面")
-    ap.add_argument("--dir", required=True, help="项目目录（含 repo.json / script.json）")
+    ap.add_argument("--dir", required=True,
+                    help="项目目录（含 cover.json；有 repo.json / script.json 会自动读取）")
     ap.add_argument("--ratio", choices=["16:9", "9:16", "both"], default="16:9")
     ap.add_argument("--headline", default=None, help="封面大字，用 **...** 标琥珀色高亮")
     ap.add_argument("--sub", default=None, help="副标题一行")
@@ -575,7 +623,9 @@ def main():
     args = ap.parse_args()
 
     base = os.path.abspath(args.dir)
-    repo = json.load(open(os.path.join(base, "repo.json"), encoding="utf-8"))
+    # repo.json 是可选的：非 GitHub 项目（VPS / SaaS / 软件测评）的字段写在 cover.json 里
+    rp = os.path.join(base, "repo.json")
+    repo = json.load(open(rp, encoding="utf-8")) if os.path.exists(rp) else {}
     cli = {"headline": args.headline, "sub": args.sub, "badge": args.badge,
            "cta": args.cta, "asset": args.asset, "asset_start": args.start}
     if args.accent:
