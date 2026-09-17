@@ -1,0 +1,18 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# 本地密钥（火山引擎 TTS Key）——绝不入库
+.volc_key
+.env
+.env.*
+
+# 运行时产物
+*.log
+tmp/
+_tmp/
+out/
+output/
