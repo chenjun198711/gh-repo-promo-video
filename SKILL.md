@@ -58,6 +58,26 @@ python scripts/trending.py --since daily --limit 25
 - ❌ 纯库 / 纯框架 / 需要专业环境才能跑起来的项目
 - ⚠️ **合规红线**：涉盗版（如课程/影视下载器）、绕过付费墙、抓取隐私数据的项目不要推广；License 为 AGPL/GPL 时避免暗示可闭源商用
 
+### 选题核验：`screen_candidates.py`（别手写临时脚本）
+
+`trending.py` 只给描述层面的初筛，Star / License / README 素材要逐个核验。**这一步用现成脚本，一次吃完**：
+
+```bash
+# 管道：直接从榜单输出里挑
+python scripts/trending.py --since daily --limit 25 | python scripts/screen_candidates.py
+# 或指定仓库 / 从文件读
+python scripts/screen_candidates.py jamiepine/voicebox Tencent/WeKnora --json picks.json
+```
+
+输出每行：`仓库 | Star | License | 素材数 | strong/medium/weak | 说明`，按可演示性排序。
+- `strong` 有动图/视频，或检出 screenshot/demo/ui 等演示向截图 → 可直接开工
+- `medium` 只有 logo/banner/架构图 → 画面要自己补录屏
+- `weak` 零素材或描述像纯库 → 别选
+
+两个容易踩的坑，脚本已处理：
+1. **现代 README 大量用 HTML `<img src>`，只匹配 Markdown `![]()` 会大面积漏检**（17 个仓库几乎全判成"无素材"）。脚本同时匹配 MD / `<img>` / `<video>`。
+2. **GitHub 的 `license.spdx_id` 会是 `NOASSERTION`**（LICENSE 带自定义版权头时），脚本会拉 `repos/X/license` 读原文重新定性；`fair-code / Sustainable Use / BSL / SSPL` 会标 ⚠ 提醒「源码可见但非标准开源」。
+
 ## 二、抓素材（fetch_repo.py）
 
 产出：
